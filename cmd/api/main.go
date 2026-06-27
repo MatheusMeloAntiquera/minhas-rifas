@@ -10,6 +10,7 @@ import (
 
 	"github.com/matheusantiquera/minhas-rifas/config"
 	"github.com/matheusantiquera/minhas-rifas/internal/raffle"
+	"github.com/matheusantiquera/minhas-rifas/internal/ticket"
 	"github.com/matheusantiquera/minhas-rifas/internal/user"
 	"github.com/matheusantiquera/minhas-rifas/pkg/logger"
 	"github.com/matheusantiquera/minhas-rifas/pkg/mongodb"
@@ -44,9 +45,14 @@ func main() {
 	raffleService := raffle.NewService(validate, raffleRepository, userRepository, log)
 	raffleHandler := raffle.NewHandler(raffleService, log)
 
+	ticketRepository := ticket.NewRepository(db)
+	ticketService := ticket.NewService(validate, ticketRepository, userRepository, raffleRepository, log)
+	ticketHandler := ticket.NewHandler(ticketService, log)
+
 	mux := http.NewServeMux()
 	userHandler.RegisterRoutes(mux)
 	raffleHandler.RegisterRoutes(mux)
+	ticketHandler.RegisterRoutes(mux)
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Port),

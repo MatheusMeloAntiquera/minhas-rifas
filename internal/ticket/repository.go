@@ -1,4 +1,4 @@
-package raffle
+package ticket
 
 import (
 	"context"
@@ -10,8 +10,8 @@ import (
 )
 
 type Repository interface {
-	Create(ctx context.Context, raffle domain.Raffle) (domain.Raffle, error)
-	FindByID(ctx context.Context, id int) (*domain.Raffle, error)
+	Create(ctx context.Context, ticket domain.Ticket) (domain.Ticket, error)
+	List(ctx context.Context, userID int, filters ListFilters) ([]domain.Ticket, error)
 }
 
 type repository struct {
@@ -21,13 +21,13 @@ type repository struct {
 
 func NewRepository(db *mongo.Database) Repository {
 	return &repository{
-		collection: db.Collection("raffles"),
+		collection: db.Collection("tickets"),
 		counters:   db.Collection("counters"),
 	}
 }
 
 func (r *repository) nextID(ctx context.Context) (int, error) {
-	filter := bson.M{"_id": "raffles"}
+	filter := bson.M{"_id": "tickets"}
 	update := bson.M{"$inc": bson.M{"seq": 1}}
 	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
 
@@ -43,30 +43,38 @@ func (r *repository) nextID(ctx context.Context) (int, error) {
 	return result.Seq, nil
 }
 
-func (r *repository) Create(ctx context.Context, raffle domain.Raffle) (domain.Raffle, error) {
+func (r *repository) Create(ctx context.Context, ticket domain.Ticket) (domain.Ticket, error) {
 	id, err := r.nextID(ctx)
 	if err != nil {
-		return domain.Raffle{}, err
+		return domain.Ticket{}, err
 	}
 
-	raffle.ID = id
+	ticket.ID = id
 
-	_, err = r.collection.InsertOne(ctx, raffle)
+	_, err = r.collection.InsertOne(ctx, ticket)
 	if err != nil {
-		return domain.Raffle{}, err
+		return domain.Ticket{}, err
 	}
 
-	return raffle, nil
+	return ticket, nil
 }
 
-func (r *repository) FindByID(ctx context.Context, id int) (*domain.Raffle, error) {
-	filter := bson.M{"_id": id}
+func (r *repository) List(ctx context.Context, userID int, filters ListFilters) ([]domain.Ticket, error) {
+	query := bson.M{"user_id": userID}
+	if filters.RaffleID > 0 {
+		query["raffle_id"] = filters.RaffleID
+	}
 
-	var raffle domain.Raffle
-	err := r.collection.FindOne(ctx, filter).Decode(&raffle)
+	cursor, err := r.collection.Find(ctx, query)
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(ctx)
 
-	return &raffle, nil
+	tickets := []domain.Ticket{}
+	if err := cursor.All(ctx, &tickets); err != nil {
+		return nil, err
+	}
+
+	return tickets, nil
 }
