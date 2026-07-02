@@ -3,15 +3,20 @@ module github.com/matheusantiquera/minhas-rifas
 go 1.26.2
 
 require (
+	github.com/clerk/clerk-sdk-go/v2 v2.7.0
 	github.com/go-playground/validator/v10 v10.30.3
+	github.com/joho/godotenv v1.5.1
 	github.com/kelseyhightower/envconfig v1.4.0
+	github.com/svix/svix-webhooks v1.96.1
 	go.mongodb.org/mongo-driver/v2 v2.7.0
 )
 
 require (
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
+	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.17.6 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect

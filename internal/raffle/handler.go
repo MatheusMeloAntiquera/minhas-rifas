@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+
+	"github.com/matheusantiquera/minhas-rifas/internal/authctx"
 )
 
 type Handler struct {
@@ -19,25 +21,26 @@ func NewHandler(service Service, logger *slog.Logger) *Handler {
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /raffles", h.Create)
-	mux.HandleFunc("GET /users/{id}/raffles", h.ListByUser)
-	mux.HandleFunc("GET /users/{id}/raffles/{raffle_id}", h.Get)
+	mux.HandleFunc("GET /raffles", h.ListByUser)
+	mux.HandleFunc("GET /raffles/{raffle_id}", h.Get)
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	userID, ok := authctx.UserIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "não autenticado"})
+		return
+	}
+
 	var input CreateInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		h.logger.Error("falha ao decodificar corpo da requisição", "error", err)
-		h.logger.Error("falha ao decodificar corpo da requisição 2", "error", err)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "corpo da requisição inválido"})
 		return
 	}
 
-	raffle, err := h.service.Create(r.Context(), input)
+	raffle, err := h.service.Create(r.Context(), userID, input)
 	if err != nil {
-		if errors.Is(err, ErrUserNotFound) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			return
-		}
 		h.logger.Error("falha ao criar rifa", "error", err)
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return
@@ -47,20 +50,15 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListByUser(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		h.logger.Error("id inválido na requisição", "error", err)
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id inválido"})
+	userID, ok := authctx.UserIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "não autenticado"})
 		return
 	}
 
-	raffles, err := h.service.ListByUser(r.Context(), id)
+	raffles, err := h.service.ListByUser(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, ErrUserNotFound) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			return
-		}
-		h.logger.Error("falha ao listar rifas do usuário", "error", err, "user_id", id)
+		h.logger.Error("falha ao listar rifas do usuário", "error", err, "user_id", userID)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "erro interno"})
 		return
 	}

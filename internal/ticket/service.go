@@ -9,49 +9,38 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/matheusantiquera/minhas-rifas/domain"
 	"github.com/matheusantiquera/minhas-rifas/internal/raffle"
-	"github.com/matheusantiquera/minhas-rifas/internal/user"
 )
 
-var (
-	ErrUserNotFound   = errors.New("usuário não encontrado")
-	ErrRaffleNotFound = errors.New("rifa não encontrada")
-)
+var ErrRaffleNotFound = errors.New("rifa não encontrada")
 
 type Service interface {
-	Create(ctx context.Context, input CreateInput) (domain.Ticket, error)
-	List(ctx context.Context, userID int, filters ListFilters) ([]domain.Ticket, error)
+	Create(ctx context.Context, userID string, input CreateInput) (domain.Ticket, error)
+	List(ctx context.Context, userID string, filters ListFilters) ([]domain.Ticket, error)
+	DeleteByUser(ctx context.Context, userID string) (int64, error)
 }
 
 type service struct {
 	validate         *validator.Validate
 	repository       Repository
-	userRepository   user.Repository
 	raffleRepository raffle.Repository
 	logger           *slog.Logger
 }
 
-func NewService(validate *validator.Validate, repository Repository, userRepository user.Repository, raffleRepository raffle.Repository, logger *slog.Logger) Service {
+func NewService(validate *validator.Validate, repository Repository, raffleRepository raffle.Repository, logger *slog.Logger) Service {
 	return &service{
 		validate:         validate,
 		repository:       repository,
-		userRepository:   userRepository,
 		raffleRepository: raffleRepository,
 		logger:           logger,
 	}
 }
 
-func (s *service) Create(ctx context.Context, input CreateInput) (domain.Ticket, error) {
+func (s *service) Create(ctx context.Context, userID string, input CreateInput) (domain.Ticket, error) {
 	if err := s.validate.Struct(input); err != nil {
 		return domain.Ticket{}, err
 	}
 
-	_, err := s.userRepository.FindByID(ctx, input.UserID)
-	if err != nil {
-		s.logger.Error("usuário não encontrado para criação de ticket", "error", err, "user_id", input.UserID)
-		return domain.Ticket{}, ErrUserNotFound
-	}
-
-	_, err = s.raffleRepository.FindByID(ctx, input.RaffleID)
+	_, err := s.raffleRepository.FindByID(ctx, input.RaffleID)
 	if err != nil {
 		s.logger.Error("rifa não encontrada para criação de ticket", "error", err, "raffle_id", input.RaffleID)
 		return domain.Ticket{}, ErrRaffleNotFound
@@ -59,7 +48,7 @@ func (s *service) Create(ctx context.Context, input CreateInput) (domain.Ticket,
 
 	now := time.Now()
 	ticket := domain.Ticket{
-		UserID:    input.UserID,
+		UserID:    userID,
 		RaffleID:  input.RaffleID,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -68,13 +57,7 @@ func (s *service) Create(ctx context.Context, input CreateInput) (domain.Ticket,
 	return s.repository.Create(ctx, ticket)
 }
 
-func (s *service) List(ctx context.Context, userID int, filters ListFilters) ([]domain.Ticket, error) {
-	_, err := s.userRepository.FindByID(ctx, userID)
-	if err != nil {
-		s.logger.Error("usuário não encontrado para listagem de tickets", "error", err, "user_id", userID)
-		return nil, ErrUserNotFound
-	}
-
+func (s *service) List(ctx context.Context, userID string, filters ListFilters) ([]domain.Ticket, error) {
 	tickets, err := s.repository.List(ctx, userID, filters)
 	if err != nil {
 		s.logger.Error("falha ao listar tickets", "error", err, "user_id", userID)
@@ -82,4 +65,8 @@ func (s *service) List(ctx context.Context, userID int, filters ListFilters) ([]
 	}
 
 	return tickets, nil
+}
+
+func (s *service) DeleteByUser(ctx context.Context, userID string) (int64, error) {
+	return s.repository.DeleteByUser(ctx, userID)
 }
