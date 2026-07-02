@@ -4,25 +4,27 @@ API para sistema de rifas em Golang, desenvolvido com IA
 
 ### Rotas
 
-#### Usuários
-
-| Método | Rota          | Descrição          |
-|--------|---------------|--------------------|
-| POST   | /users        | Criar usuário      |
-| PUT    | /users/{id}   | Atualizar usuário  |
-| DELETE | /users/{id}   | Deletar usuário    |
+> Todas as rotas abaixo exigem `Authorization: Bearer <token>`. O "dono" da operação é
+> sempre o usuário autenticado — não é mais informado na URL nem no corpo. A gestão de
+> usuários (criar/atualizar/deletar conta) é feita diretamente no Clerk.
 
 #### Rifas
 
-| Método | Rota                              | Descrição                            |
-|--------|-----------------------------------|--------------------------------------|
-| POST   | /raffles                          | Criar rifa                           |
-| GET    | /users/{id}/raffles               | Listar rifas de um usuário           |
-| GET    | /users/{id}/raffles/{raffle_id}   | Obter detalhe de uma rifa específica |
+| Método | Rota                    | Descrição                                       |
+|--------|-------------------------|-------------------------------------------------|
+| POST   | /raffles                | Criar rifa          |
+| GET    | /raffles                | Listar rifas criadas pelo usuário    |
+| GET    | /raffles/{raffle_id}    | Obter detalhe de uma rifa específica            |
 
 #### Tickets
 
-| Método | Rota                  | Descrição                                                 |
-|--------|-----------------------|-----------------------------------------------------------|
-| POST   | /tickets              | Criar ticket                                              |
-| GET    | /users/{id}/tickets   | Listar tickets de um usuário (aceita query `?raffle_id=`) |
+| Método | Rota       | Descrição                                                         |
+|--------|------------|-------------------------------------------------------------------|
+| POST   | /tickets   | Criar ticket      |
+| GET    | /tickets   | Listar tickets (aceita query `?raffle_id=`) |
+
+#### Webhooks
+
+| Método | Rota              | Descrição                                              |
+|--------|-------------------|--------------------------------------------------------|
+| POST   | /webhooks/clerk   | Limpeza em cascata: no evento `user.deleted` do Clerk, remove as raffles/tickets do usuário |

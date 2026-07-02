@@ -11,8 +11,9 @@ import (
 
 type Repository interface {
 	Create(ctx context.Context, ticket domain.Ticket) (domain.Ticket, error)
-	List(ctx context.Context, userID int, filters ListFilters) ([]domain.Ticket, error)
+	List(ctx context.Context, userID string, filters ListFilters) ([]domain.Ticket, error)
 	CountByRaffle(ctx context.Context, raffleID int) (int64, error)
+	DeleteByUser(ctx context.Context, userID string) (int64, error)
 }
 
 type repository struct {
@@ -21,8 +22,14 @@ type repository struct {
 }
 
 func NewRepository(db *mongo.Database) Repository {
+	coll := db.Collection("tickets")
+
+	coll.Indexes().CreateOne(context.Background(), mongo.IndexModel{
+		Keys: bson.D{{Key: "user_id", Value: 1}},
+	})
+
 	return &repository{
-		collection: db.Collection("tickets"),
+		collection: coll,
 		counters:   db.Collection("counters"),
 	}
 }
@@ -60,7 +67,7 @@ func (r *repository) Create(ctx context.Context, ticket domain.Ticket) (domain.T
 	return ticket, nil
 }
 
-func (r *repository) List(ctx context.Context, userID int, filters ListFilters) ([]domain.Ticket, error) {
+func (r *repository) List(ctx context.Context, userID string, filters ListFilters) ([]domain.Ticket, error) {
 	query := bson.M{"user_id": userID}
 	if filters.RaffleID > 0 {
 		query["raffle_id"] = filters.RaffleID
@@ -82,4 +89,13 @@ func (r *repository) List(ctx context.Context, userID int, filters ListFilters) 
 
 func (r *repository) CountByRaffle(ctx context.Context, raffleID int) (int64, error) {
 	return r.collection.CountDocuments(ctx, bson.M{"raffle_id": raffleID})
+}
+
+func (r *repository) DeleteByUser(ctx context.Context, userID string) (int64, error) {
+	result, err := r.collection.DeleteMany(ctx, bson.M{"user_id": userID})
+	if err != nil {
+		return 0, err
+	}
+
+	return result.DeletedCount, nil
 }

@@ -10,7 +10,6 @@ type CreateInput struct {
 	Title       string    `json:"title" validate:"required"`
 	Description string    `json:"description" validate:"required"`
 	ValueTicket float64   `json:"value_ticket" validate:"required,gt=0"`
-	UserID      int       `json:"user_id" validate:"required"`
 	DrawDate    time.Time `json:"draw_date" validate:"required"`
 }
 

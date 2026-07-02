@@ -12,7 +12,8 @@ import (
 type Repository interface {
 	Create(ctx context.Context, raffle domain.Raffle) (domain.Raffle, error)
 	FindByID(ctx context.Context, id int) (*domain.Raffle, error)
-	ListByUser(ctx context.Context, userID int) ([]domain.Raffle, error)
+	ListByUser(ctx context.Context, userID string) ([]domain.Raffle, error)
+	DeleteByUser(ctx context.Context, userID string) (int64, error)
 }
 
 type repository struct {
@@ -21,8 +22,14 @@ type repository struct {
 }
 
 func NewRepository(db *mongo.Database) Repository {
+	coll := db.Collection("raffles")
+
+	coll.Indexes().CreateOne(context.Background(), mongo.IndexModel{
+		Keys: bson.D{{Key: "user_id", Value: 1}},
+	})
+
 	return &repository{
-		collection: db.Collection("raffles"),
+		collection: coll,
 		counters:   db.Collection("counters"),
 	}
 }
@@ -72,7 +79,7 @@ func (r *repository) FindByID(ctx context.Context, id int) (*domain.Raffle, erro
 	return &raffle, nil
 }
 
-func (r *repository) ListByUser(ctx context.Context, userID int) ([]domain.Raffle, error) {
+func (r *repository) ListByUser(ctx context.Context, userID string) ([]domain.Raffle, error) {
 	filter := bson.M{"user_id": userID}
 
 	cursor, err := r.collection.Find(ctx, filter)
@@ -87,4 +94,13 @@ func (r *repository) ListByUser(ctx context.Context, userID int) ([]domain.Raffl
 	}
 
 	return raffles, nil
+}
+
+func (r *repository) DeleteByUser(ctx context.Context, userID string) (int64, error) {
+	result, err := r.collection.DeleteMany(ctx, bson.M{"user_id": userID})
+	if err != nil {
+		return 0, err
+	}
+
+	return result.DeletedCount, nil
 }

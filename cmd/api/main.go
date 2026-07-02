@@ -9,9 +9,9 @@ import (
 	"syscall"
 
 	"github.com/matheusantiquera/minhas-rifas/config"
+	"github.com/matheusantiquera/minhas-rifas/internal/auth"
 	"github.com/matheusantiquera/minhas-rifas/internal/raffle"
 	"github.com/matheusantiquera/minhas-rifas/internal/ticket"
-	"github.com/matheusantiquera/minhas-rifas/internal/user"
 	"github.com/matheusantiquera/minhas-rifas/pkg/logger"
 	"github.com/matheusantiquera/minhas-rifas/pkg/mongodb"
 	pkgvalidator "github.com/matheusantiquera/minhas-rifas/pkg/validator"
@@ -37,27 +37,38 @@ func main() {
 	db := mongodb.GetDatabase(mongoClient, cfg.MongoDatabaseName)
 	validate := pkgvalidator.New()
 
-	userRepository := user.NewRepository(db)
-	userService := user.NewService(validate, userRepository, log)
-	userHandler := user.NewHandler(userService, log)
-
 	raffleRepository := raffle.NewRepository(db)
 	ticketRepository := ticket.NewRepository(db)
 
-	raffleService := raffle.NewService(validate, raffleRepository, userRepository, ticketRepository, log)
+	raffleService := raffle.NewService(validate, raffleRepository, ticketRepository, log)
 	raffleHandler := raffle.NewHandler(raffleService, log)
 
-	ticketService := ticket.NewService(validate, ticketRepository, userRepository, raffleRepository, log)
+	ticketService := ticket.NewService(validate, ticketRepository, raffleRepository, log)
 	ticketHandler := ticket.NewHandler(ticketService, log)
 
+	// Adaptador do provedor de autenticação (Clerk). Trocar de provedor se
+	// resume a substituir esta linha por outra implementação de auth.Authenticator.
+	authenticator := auth.NewClerkAuthenticator(cfg.ClerkSecretKey)
+	authMiddleware := auth.NewMiddleware(authenticator, log)
+
+	// O webhook do Clerk cuida da limpeza em cascata quando um usuário é
+	// deletado (user.deleted), removendo suas raffles/tickets.
+	clerkWebhookHandler := auth.NewWebhookHandler(raffleService, ticketService, cfg.ClerkWebhookSigningSecret, log)
+
+	// Rotas protegidas: exigem token de sessão válido do Clerk.
 	mux := http.NewServeMux()
-	userHandler.RegisterRoutes(mux)
 	raffleHandler.RegisterRoutes(mux)
 	ticketHandler.RegisterRoutes(mux)
 
+	// Roteador raiz: o webhook do Clerk é autenticado por assinatura (Svix) e
+	// fica fora do middleware; todo o resto passa pela autenticação.
+	root := http.NewServeMux()
+	clerkWebhookHandler.RegisterRoutes(root)
+	root.Handle("/", authMiddleware.Authenticate(mux))
+
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Port),
-		Handler: mux,
+		Handler: root,
 	}
 
 	go func() {
